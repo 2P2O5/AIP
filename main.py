@@ -1,8 +1,21 @@
-LLM_THREAD = 3
+import yaml
+
+# 读取 config.yaml 文件
+try:
+    with open('./config.yaml', 'r', encoding='utf-8') as file:
+        configYaml = yaml.safe_load(file)
+except Exception as e:
+    print(f"Failed to load config.yaml: {e}")
+    exit(1)
+
+# 提取端口配置
+ports = configYaml['front']['ports']
+GROUP_ID = configYaml['backend']['qq']['groupid']
+
+LLM_THREAD = configYaml['backend']['LLM']['threads_num']
 HOST = "127.0.0.1"
-PLAYER = "可莉"
+PLAYER = configYaml['backend']['MC']['player_name']
 SEARCH_URL = "http://192.168.1.115:81/search?q="
-GROUP_ID = "752683607"
 
 import os
 import sys
@@ -12,7 +25,7 @@ sys.path.append(dirnow)
 import socket
 try:
     logger = socket.socket()    
-    logger.connect((HOST, 8000))
+    logger.connect((HOST, ports['loggerTCP']))
     logger.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def log(data):
@@ -20,17 +33,17 @@ try:
             if (type(data) == str):
                 data = bytes(data, encoding="utf-8")
             else:
-                data = bytes(str(data),encoding="urf-8")
+                data = bytes(str(data), encoding="utf-8")
 
         logger.send(data)
         print(str(data, encoding="utf-8"))
 
     mid = socket.socket()
-    mid.connect((HOST, 8002))
+    mid.connect((HOST, ports['tcp-backend']))
     mid.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     to_qq = socket.socket()
-    to_qq.connect((HOST, 8003))
+    to_qq.connect((HOST, ports['backend-qq']))
     to_qq.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 except:
     print("Mid.js don't work.")

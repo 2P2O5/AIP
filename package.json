@@ -2,6 +2,7 @@
   "dependencies": {
     "axios": "^1.8.4",
     "electron": "^35.0.3",
+    "js-yaml": "^4.1.0",
     "node-media-server": "^4.0.12",
     "proton-native": "^2.0.4",
     "ws": "^8.18.1"

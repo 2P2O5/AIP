@@ -16,29 +16,48 @@ const { exec } = require('child_process');
 const axios = require('axios');
 const http = require('http');
 
-// const proton = require("proton-native");
-
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { readFileSync } = require('fs');
+const yaml = require('js-yaml');
+const fs = require('fs');
 
 const mc_front = require("./front/mc/main.js").exports
 // const mc_front = () => { };
 
-global.GROUP_ID = "752683607";
+// 读取 config.yaml 文件
+let configYaml;
+try {
+    configYaml = yaml.load(fs.readFileSync('./config.yaml', 'utf8'));
+} catch (e) {
+    console.error(getTime("FAIL"), "Failed to load config.yaml:", e.message);
+    process.exit(1);
+}
+
+// 提取端口配置
+const ports = configYaml.front.ports;
+
+// 提取 napcat 配置
+const napcatHttpPort = ports['napcat-http'];
+const napcatWebsocketPort = ports['napcat-websocket'];
+
+// 提取其他配置信息
+global.GROUP_ID = configYaml.backend.qq.group_id;
+// console.log(configYaml)
 // 配置信息
 const config = {
     ports: {
-        loggerTcp: 8000,
-        ws_show: 8200,
-        midTcp: 8002,
-        rtmp: 1935,
-        wsCtrl: 8301,
-        ctrl_http: 8300
+        loggerTcp: ports.loggerTCP,
+        websocket_show: ports['websocket-show'],
+        tcp_backend: ports['tcp-backend'],
+        rtmp: ports.rtmp,
+        wsCtrl: ports['websocket-control'],
+        ctrl_http: ports['http-control'],
+        backend_qq: ports['backend-qq'],
     },
     rtmpConfig: {
         rtmp: {
-            port: 1935,
+            port: ports.rtmp,
             chunk_size: 10000,
             gop_cache: true,
             ping: 30,
@@ -217,7 +236,7 @@ function startControlServer(wsPort, wsCtrl, tcpPort, crtlHttp) {
                 ]
             };
 
-            axios.post('http://127.0.0.1:3000/send_group_msg', _data)
+            axios.post(`http://127.0.0.1:${napcatHttpPort}/send_group_msg`, _data)
                 .then(response => {
                     console.log(getTime(), '响应数据:', typeof response.data, response.data);
                 })
@@ -236,11 +255,11 @@ function startControlServer(wsPort, wsCtrl, tcpPort, crtlHttp) {
         });
     });
 
-    qq_tcpServer.listen(tcpPort + 1, () => {
+    qq_tcpServer.listen(config.ports.backend_qq, () => {
         console.log(getTime(), `[mid] Start qq server (TCP) at ${tcpPort + 1}`);
     });
 
-    const qq_ws = new WebSocket('ws://127.0.0.1:3001');
+    const qq_ws = new WebSocket(`ws://127.0.0.1:${napcatWebsocketPort}`);
 
     // 连接成功后
     qq_ws.on('open', function open() {
@@ -320,7 +339,7 @@ async function startFfmpeg() {
 // 启动所有服务
 function startAllServices() {
     startLoggerServer(config.ports.loggerTcp);
-    startControlServer(config.ports.ws_show, config.ports.wsCtrl, config.ports.midTcp, config.ports.ctrl_http);
+    startControlServer(config.ports.websocket_show, config.ports.wsCtrl, config.ports.tcp_backend, config.ports.ctrl_http);
     // startRtmpServer(config.rtmpConfig);
     // startFront();
     setTimeout(() => {

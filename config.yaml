@@ -1,0 +1,87 @@
+front: 
+    ports:
+        # 后端发送中转站的日志数据
+        loggerTCP: 8000
+        
+        # 中转站发送前端的展示数据
+        websocket-show: 8200
+
+        # 控制端的 http 端口
+        http-control: 8300
+
+        # 控制端的 websocket 端口
+        websocket-control: 8301
+
+        # 通过 websocket-control 转发给后端的 tcp端口
+        tcp-backend: 8002
+
+        # rtmp 服务器端口
+        rtmp: 1935
+
+        # backend 直接发送给qq的端口
+        backend-qq: 8003
+
+        # 以下端口请在napcat设置好后再使用。
+        # napcat http服务器端口（推送数据到napcat）
+        napcat-http: 3000
+
+        # napcat websocket服务器端口（接收数据到napcat）
+        napcat-websocket: 3001
+
+    html:
+        # 前端页面的地址
+        html_file: ./front
+
+        # 是否播放音效
+        play_sound: true
+
+        # 是否展示人物
+        show_player: true
+
+    # 在 amd gpu 上面可以运行的版本，请自行更换参数
+    # 备注：为了 ffmpefg 能够使用 vaapi 编码，非root用于运行：
+    # sudo chmod 666 /dev/dri/renderD128
+    # 备注：如果你使用的是英特尔的集显，请将 /dev/dri/renderD128 替换为 /dev/dri/renderD129
+    # 备注：如果你使用的是英伟达的显卡，请将 /dev/dri/renderD128 替换为 /dev/dri/renderD130
+    ffmpeg:
+        args: -vaapi_device /dev/dri/renderD128
+                -f x11grab
+                -framerate 30
+                -draw_mouse 0
+                -i :10.0+0,0
+                -thread_queue_size 2048 
+                -f pulse 
+                -i default 
+                -vf 'hwupload,scale_vaapi=format=nv12,setpts=N/(30*TB)' 
+                -c:v h264_vaapi 
+                -global_quality 1 
+                -bf 0 
+                -c:a aac 
+                -b:a 128k 
+                -vsync 1 
+                -f flv rtmp://127.0.0.1/main"
+backend:
+    LLM:
+        model_path: "./LLM/qwen2.5-0.5b-instruct-q8_0.gguf"
+        max_token: 32768
+        
+        # 运行线程数
+        threads_num: 3
+
+    TTS:
+        chinese-roberta-wwm-ext-large_path: "./TTS/mods/chinese-roberta-wwm-ext-large"
+        bert-model_path: "./TTS/mods/hoyoTTS"
+        pth-name: "G_78000.pth"
+
+        # 运行线程数
+        threads_num: 3
+
+    MC:
+        player_name: keli
+        online: false
+        mcserver: 127.0.0.1:25565
+
+    qq:
+        groupid: "752683607"
+
+    
