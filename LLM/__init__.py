@@ -116,5 +116,3 @@ if __name__ == "__main__":
     a = time.time()
     print(unsplit("帮我生成一个女孩图片。"))
     print(time.time() - a)
-
-# sk-cf205b0177ba47e181107727cce04039

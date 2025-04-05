@@ -30,9 +30,10 @@
     </style>
 </head>
 <body>
-    <iframe class="person" src="./person/index.html"></iframe>
+    <iframe class="person"></iframe>
     <iframe class="mc" src=""></iframe>
     <script>
+        document.querySelector(".person").setAttribute("src", "./person/index.html#" + location.href.split("#")[1]);
         setTimeout(() => {
             // document.querySelector(".mc").setAttribute("src", "http://127.0.0.1:3007");
         }, 2500);

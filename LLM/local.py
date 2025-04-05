@@ -24,17 +24,15 @@ def ready(_log, _SEARCH_URL):
     )
     log, search_url = _log, _SEARCH_URL
 
-# user = My, system = system, assistant = AI
-
 def split_text_backwards(text, group_size=6):
     # 从后向前分隔文本
     result = []
     while text:
-        result.insert(0, text[-group_size:])  # 将最后的5个字符放到结果的最前面
-        text = text[:-group_size]  # 删除已分割的字符
+        result.insert(0, text[-group_size:])
+        text = text[:-group_size]
     return result
 
-def run(prompt, others = [], stream = True): # yield
+def run(prompt, others = [], stream = True):
     global llm
     with open( dirnow + "/promot", encoding = "utf-8") as c:
         with open( dirnow + "/tools", encoding = "utf-8") as c2:
@@ -97,5 +95,3 @@ if __name__ == "__main__":
     a = time.time()
     print(unsplit("帮我生成一个女孩图片。"))
     print(time.time() - a)
-
-# sk-cf205b0177ba47e181107727cce04039

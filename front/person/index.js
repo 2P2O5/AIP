@@ -170,7 +170,7 @@ class MMDApplication {
 
     // ================= 网络通信 =================
     async initSocket() {
-        this.socket = new WebSocket("ws://127.0.0.1:8200");
+        this.socket = new WebSocket(`ws://127.0.0.1:${location.href.split("#")[1]}`);
         this.bufferTemp = [];
         this.text = "";
 

@@ -135,78 +135,97 @@ function extractImageContent(text) {
     return result;
 }
 
-// WebSocket控制服务器
-function startControlServer(wsPort, wsCtrl, tcpPort, crtlHttp) {
-    http.createServer((res, rep) => {
+// 提取 WebSocket 连接逻辑为函数
+function setupWebSocket(url, onMessage, onError) {
+    const ws = new WebSocket(url);
+
+    ws.on('open', () => {
+        console.log(getTime("INFO"), `[mid] WebSocket client connected to ${url}`);
+    });
+
+    ws.on('message', onMessage);
+
+    ws.on('error', (err) => {
+        console.error(getTime("FAIL"), `[mid] WebSocket client error: ${err.message}`);
+    });
+
+    return ws;
+}
+
+// 优化 startControlServer 函数
+function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
+    // HTTP 控制服务器
+    http.createServer((req, res) => {
         try {
-            rep.end(readFileSync("./front/ctrl" + res.url));
+            res.end(readFileSync(`./front/ctrl${req.url}`));
         } catch {
-            rep.end("404");
+            res.end("404");
         }
-    }).listen(crtlHttp, () => {
-        console.log(getTime(), `[http_ctrl] Start websocket server on port ${crtlHttp}`);
-    })
-    const wss_show = new WebSocket.Server({ port: wsPort, host: '0.0.0.0' }, () => {
-        console.log(getTime(), `[ws_show] Start websocket server on port ${wsPort}`);
+    }).listen(ctrlHttp, () => {
+        console.log(getTime(), `[http_ctrl] HTTP control server started on port ${ctrlHttp}`);
     });
-    const wss_ctrl = new WebSocket.Server({ port: wsCtrl, host: '0.0.0.0' }, () => {
-        console.log(getTime(), `[ws_ctrl] Start websocket server on port ${wsCtrl}`);
+
+    // WebSocket 服务器
+    const wssShow = new WebSocket.Server({ port: wsPort, host: '0.0.0.0' }, () => {
+        console.log(getTime(), `[ws_show] WebSocket server started on port ${wsPort}`);
     });
+    const wssCtrl = new WebSocket.Server({ port: wsCtrl, host: '0.0.0.0' }, () => {
+        console.log(getTime(), `[ws_ctrl] WebSocket server started on port ${wsCtrl}`);
+    });
+
     let wsClient = null;
     let tcpClient = null;
 
-    wss_show.on('connection', (ws) => {
+    wssShow.on('connection', (ws) => {
         wsClient = ws;
         ws.on('message', (message) => {
-            if (tcpClient && tcpClient.writable) {
+            if (tcpClient?.writable) {
                 tcpClient.write(message);
             }
         });
     });
 
-    wss_ctrl.on('connection', (ws) => {
+    wssCtrl.on('connection', (ws) => {
         ws.on('message', (message) => {
-            if (tcpClient && tcpClient.writable) {
+            if (tcpClient?.writable) {
                 tcpClient.write(message);
             }
         });
     });
 
+    // TCP 中间服务器
     const tcpServer = net.createServer((socket) => {
         tcpClient = socket;
         socket.on("data", (data) => {
-            if (wsClient && wsClient.readyState === WebSocket.OPEN) {
+            if (wsClient?.readyState === WebSocket.OPEN) {
                 wsClient.send(data);
             } else {
-                console.log(getTime("WARN"), `[mid] [qq] -> [tcp] Backend closed.`)
+                console.log(getTime("WARN"), `[mid] [qq] -> [tcp] Backend closed.`);
             }
         });
 
         socket.on('error', (err) => {
-            console.error(getTime("FAIL"), `[mid] back(TCP) server error: ${err.message}`);
+            console.error(getTime("FAIL"), `[mid] TCP server error: ${err.message}`);
         });
 
         socket.on('close', () => {
-            console.log(getTime("FAIL"), '[mid] back(TCP) server connection closed');
+            console.log(getTime("FAIL"), '[mid] TCP server connection closed');
         });
     });
 
     tcpServer.listen(tcpPort, () => {
-        console.log(getTime(), `[mid] Start mid server (TCP) at ${tcpPort}`);
+        console.log(getTime(), `[mid] TCP server started on port ${tcpPort}`);
     });
-
 
     let running = false;
     global.userid = null; /* User id. 用来 @*/
 
-    const qq_tcpServer = net.createServer((socket) => {
-        // TODO 文本分割 输出图片。
-        // url = ()
+    const qqTcpServer = net.createServer((socket) => {
         socket.on("data", (data) => {
             running = false;
-            const text = data.toString("utf-8").split("_!_")[1]
+            const text = data.toString("utf-8").split("_!_")[1];
             const out = extractImageContent(text);
-            console.log(out)
+            console.log(out);
             const _data = {
                 "group_id": GROUP_ID,
                 "message": [
@@ -227,7 +246,7 @@ function startControlServer(wsPort, wsCtrl, tcpPort, crtlHttp) {
                         "data": {
                             "file": `https://image.pollinations.ai/prompt/${out.imageContent[0]}?width=1024&height=1024&model=flux&nologo=true`,
                         }
-                    }: {
+                    } : {
                         "type": "text",
                         "data": {
                             "text": "",
@@ -255,45 +274,39 @@ function startControlServer(wsPort, wsCtrl, tcpPort, crtlHttp) {
         });
     });
 
-    qq_tcpServer.listen(config.ports.backend_qq, () => {
+    qqTcpServer.listen(config.ports.backend_qq, () => {
         console.log(getTime(), `[mid] Start qq server (TCP) at ${tcpPort + 1}`);
     });
 
-    const qq_ws = new WebSocket(`ws://127.0.0.1:${napcatWebsocketPort}`);
-
-    // 连接成功后
-    qq_ws.on('open', function open() {
-        console.error(getTime("INFO"), `[mid] qq websocket client link natcat success!`);
-    });
-    // 接收到消息时
-    qq_ws.on('message', function incoming(data) {
+    // QQ WebSocket 客户端
+    const qqWs = setupWebSocket(`ws://127.0.0.1:${napcatWebsocketPort}`, (data) => {
         data = JSON.parse(data);
-        // "raw_message": "[CQ:at,qq=1352624036] 你好"
-        if (data["post_type"] == "message") {
-            if (running) return console.log(getTime(), `[mid] [qq] this message don't be use.`)
-            var { sender, raw_message } = data;
-            var { user_id, nickname } = sender;
-            global.userid = user_id;
-            console.log(getTime(), `[mid] qq ${user_id}:${nickname} say |${raw_message}|`)
-            if ((a = raw_message.split("[CQ:at,qq=1352624036]")).length > 1) {
-                let message = a.join("");
-                running = true;
-                if (tcpClient && tcpClient.writable) {
-                    tcpClient.write(`//_run qq的${nickname}说：${message}`);
-                } else {
-                    running = false;
-                    console.log(getTime("WARN"), `[mid] [qq] -> [tcp] Backend closed.`)
-                }
-            }
+        if (data["post_type"] === "message") {
+            handleQQMessage(data, tcpClient);
         }
-    });
-
-    // 处理错误
-    qq_ws.on('error', function (err) {
-        console.error(getTime("FAIL"), `[mid] qq websocket client error: ${err.message}`);
     });
 }
 
+// 提取 QQ 消息处理逻辑为函数
+function handleQQMessage(data, tcpClient) {
+    if (running) return console.log(getTime(), `[mid] [qq] This message is ignored.`);
+    const { sender, raw_message } = data;
+    const { user_id, nickname } = sender;
+    global.userid = user_id;
+
+    console.log(getTime(), `[mid] QQ ${user_id}:${nickname} says |${raw_message}|`);
+    const messageParts = raw_message.split("[CQ:at,qq=1352624036]");
+    if (messageParts.length > 1) {
+        const message = messageParts.join("");
+        running = true;
+        if (tcpClient?.writable) {
+            tcpClient.write(`//_run QQ的${nickname}说：${message}`);
+        } else {
+            running = false;
+            console.log(getTime("WARN"), `[mid] [qq] -> [tcp] Backend closed.`);
+        }
+    }
+}
 
 function startRtmpServer(rtmpConfig) {
     const nms = new NodeMediaServer(rtmpConfig);
@@ -320,7 +333,7 @@ function startFront() {
             fullscreen: true
         });
 
-        mainWindow.loadURL(`file://${path.join(__dirname, '/front/index.html')}`);
+        mainWindow.loadURL(`file://${path.join(__dirname, '/front/index.html')}#${config.ports.wsCtrl}`);
         mainWindow.focus();
     });
 }
@@ -340,11 +353,11 @@ async function startFfmpeg() {
 function startAllServices() {
     startLoggerServer(config.ports.loggerTcp);
     startControlServer(config.ports.websocket_show, config.ports.wsCtrl, config.ports.tcp_backend, config.ports.ctrl_http);
-    // startRtmpServer(config.rtmpConfig);
-    // startFront();
+    startRtmpServer(config.rtmpConfig);
+    startFront();
     setTimeout(() => {
         startBackend();
-        // startFfmpeg()
+        startFfmpeg()
     }, 1000);
 
 }

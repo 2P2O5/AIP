@@ -1,4 +1,10 @@
 import yaml
+import os
+import sys
+import socket
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, wait
 
 # 读取 config.yaml 文件
 try:
@@ -8,69 +14,69 @@ except Exception as e:
     print(f"Failed to load config.yaml: {e}")
     exit(1)
 
-# 提取端口配置
+# 提取配置
 ports = configYaml['front']['ports']
 GROUP_ID = configYaml['backend']['qq']['groupid']
-
 LLM_THREAD = configYaml['backend']['LLM']['threads_num']
 HOST = "127.0.0.1"
 PLAYER = configYaml['backend']['MC']['player_name']
 SEARCH_URL = "http://192.168.1.115:81/search?q="
 
-import os
-import sys
-dirnow = os.path.dirname(__file__) + "/.venv/lib/python3.11/site-packages"
-sys.path.append(dirnow)
+# 添加 .venv 路径
+dirnow = os.path.dirname(__file__)
+venv_path = os.path.join(dirnow, ".venv/lib/python3.11/site-packages")
+sys.path.append(venv_path)
 
-import socket
-try:
-    logger = socket.socket()    
-    logger.connect((HOST, ports['loggerTCP']))
-    logger.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+# 初始化 socket 连接
+def init_socket_connection(host, port, description):
+    try:
+        sock = socket.socket()
+        sock.connect((host, port))
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return sock
+    except Exception as e:
+        print(f"Failed to connect {description}: {e}")
+        exit(1)
 
-    def log(data):
-        if (type(data) != bytes):
-            if (type(data) == str):
-                data = bytes(data, encoding="utf-8")
-            else:
-                data = bytes(str(data), encoding="utf-8")
+# 初始化 logger
+logger = init_socket_connection(HOST, ports['loggerTCP'], "loggerTCP")
 
-        logger.send(data)
-        print(str(data, encoding="utf-8"))
+def log(data):
+    if not isinstance(data, bytes):
+        data = bytes(str(data), encoding="utf-8")
+    logger.send(data)
+    print(data.decode("utf-8"))
 
-    mid = socket.socket()
-    mid.connect((HOST, ports['tcp-backend']))
-    mid.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-    to_qq = socket.socket()
-    to_qq.connect((HOST, ports['backend-qq']))
-    to_qq.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-except:
-    print("Mid.js don't work.")
-    exit(1)
+# 初始化其他 socket
+mid = init_socket_connection(HOST, ports['tcp-backend'], "tcp-backend")
+to_qq = init_socket_connection(HOST, ports['backend-qq'], "backend-qq")
 
 log("INFO|[server] Recv start sign")
 
+def send_data(data):
+    mid.send(bytes(data, encoding="utf-8"))
+    time.sleep(0.01)
+# 检查环境
 try:
     import torch
-
-except:
+except ImportError:
     log("FAIL|You are not in .venv")
     log("INFO|[server] Backend close.")
     exit(1)
 
-
+# 加载模块
 try:
-    import os
-    import sys
-    dirnow = os.path.dirname(__file__)
-    sys.path.append(dirnow)
-    import time
-    # import TTS
+    import TTS
     import LLM
-    from concurrent.futures import ThreadPoolExecutor, wait
 
     threadPool = ThreadPoolExecutor(4)
+
+    tts = TTS.init(
+        os.path.join(dirnow, "TTS/mods/chinese-roberta-wwm-ext-large"),
+        os.path.join(dirnow, "TTS/mods/hoyoTTS/G_78000.pth"),
+        os.path.join(dirnow, "TTS/mods/hoyoTTS/config.json"),
+        device="cpu"
+    )
 
     LLM.ready(log, SEARCH_URL)
 
@@ -79,63 +85,51 @@ try:
     while True:
         exits = True
         while exits:
-            recv = str(mid.recv(1024), encoding="utf-8").split(" ")
-            # 如果接收到结束指令
-            if recv[0] == "":
-                print("Mid.js don't work.")
-                raise RuntimeError
+            recv = mid.recv(1024).decode("utf-8").split(" ")
+            if not recv[0]:
+                raise RuntimeError("Mid.js don't work.")
 
             if recv[0] == "//run":
                 text = " ".join(recv[1:])
                 exits = False
 
-            if recv[0] == "//_run":
-                # 特许版本 不进行TTS.
+            elif recv[0] == "//_run":
                 text = " ".join(recv[1:])
-                log("INFO|[server] Start run (qq)"+text)
+                log(f"INFO|[server] Start run (qq) {text}")
                 out = "".join(LLM.unsplit(text))
-                log("INFO|[server] retrun " + out)
+                log(f"INFO|[server] return {out}")
                 time.sleep(0.01)
                 to_qq.send(bytes("_!_" + out, encoding="utf-8"))
                 log("INFO|[server] Finish.")
                 continue
-    
+
         start_time = time.time()
-        # 提交任务
-        log("INFO|[server] Start run "+text)
+        log(f"INFO|[server] Start run {text}")
         ou = list(LLM.split(text))
 
-        log("INFO|[server] split " + str(len(ou)))
-        ou_t = []
-        for i in ou:
-            ou_t.append(threadPool.submit(TTS.infer, i, "可莉"))
-        mid.send(bytes("1", encoding="utf-8"))   
-        time.sleep(0.01)  
-        for i in range(len(ou)):
-            wait([ou_t[i]])
-            data = ou_t[i].result()
-            mid.send(bytes("2", encoding="utf-8"))
-            time.sleep(0.01)
-            mid.send(bytes(f"_{ou[i]}", encoding="utf-8"))
-            time.sleep(0.01)
-            mid.send(TTS.np2wav([data]))
-            time.sleep(0.01)
-            mid.send(bytes("3", encoding="utf-8"))
-            time.sleep(0.01)
-            log("INFO|[server] Send tts part.")
-        log("INFO|[server] Run time: "+str(time.time() - start_time) +"s.")
-        mid.send(bytes("4", encoding="utf-8"))
+        log(f"INFO|[server] split {len(ou)}")
+        ou_t = [threadPool.submit(tts, i, "可莉") for i in ou]
+        send_data("1")
+
+        for i, future in enumerate(ou_t):
+            wait([future])
+            data = future.result()
+            send_data("2")
+            send_data(f"_{ou[i]}")
+            send_data(data)
+            send_data("3")
+        
+        log(f"INFO|[server] Run time: {time.time() - start_time}s.")
+        send_data("4")
 
 except KeyboardInterrupt:
     log("INFO|[server] Backend close.")
     exit(0)
 except BaseException as e:
-    import traceback
-    log("FAIL|[server] "+ str(e) + "\n" + traceback.format_exc())
+    log(f"FAIL|[server] {e}\n{traceback.format_exc()}")
 
 try:
-    import time
     time.sleep(0.01)
     log("INFO|[server] Backend close.")
-except:
+except Exception:
     pass

@@ -5,7 +5,7 @@ from openai import OpenAI
 
 dirnow = os.path.dirname(__file__)
 
-client = OpenAI(api_key="sk-cf205b0177ba47e181107727cce04039", base_url="https://api.deepseek.com")
+client = OpenAI(api_key="", base_url="https://api.deepseek.com")
 
 def ready(thread_num, _log, _search_url):
     pass
@@ -24,7 +24,6 @@ def split(text, others = []):
     last = ""
     for delta in response:
         print(delta, end="|", flush=True)
-        # 使用 yieid 返回 一个搞完自动下一个
         if delta in ["，","。","；","：","！","？","。。。","。。。。。。","，",'——','--']:
             yield last + delta
             last = ""
@@ -33,6 +32,3 @@ def split(text, others = []):
 
     if last != "":
         yield last
-
-
-# sk-cf205b0177ba47e181107727cce04039
