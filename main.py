@@ -14,7 +14,6 @@ except Exception as e:
     print(f"Failed to load config.yaml: {e}")
     exit(1)
 
-# 提取配置
 ports = configYaml['front']['ports']
 GROUP_ID = configYaml['backend']['qq']['groupid']
 LLM_THREAD = configYaml['backend']['LLM']['threads_num']
@@ -22,12 +21,6 @@ HOST = "127.0.0.1"
 PLAYER = configYaml['backend']['MC']['player_name']
 SEARCH_URL = "http://192.168.1.115:81/search?q="
 
-# 添加 .venv 路径
-dirnow = os.path.dirname(__file__)
-venv_path = os.path.join(dirnow, ".venv/lib/python3.11/site-packages")
-sys.path.append(venv_path)
-
-# 初始化 socket 连接
 def init_socket_connection(host, port, description):
     try:
         sock = socket.socket()
@@ -38,7 +31,6 @@ def init_socket_connection(host, port, description):
         print(f"Failed to connect {description}: {e}")
         exit(1)
 
-# 初始化 logger
 logger = init_socket_connection(HOST, ports['loggerTCP'], "loggerTCP")
 
 def log(data):
@@ -69,16 +61,21 @@ try:
     import TTS
     import LLM
 
-    threadPool = ThreadPoolExecutor(4)
+    threadPool = ThreadPoolExecutor(configYaml["backend"]["TTS"]["threads_num"])
 
     tts = TTS.init(
-        os.path.join(dirnow, "TTS/mods/chinese-roberta-wwm-ext-large"),
-        os.path.join(dirnow, "TTS/mods/hoyoTTS/G_78000.pth"),
-        os.path.join(dirnow, "TTS/mods/hoyoTTS/config.json"),
-        device="cpu"
+        configYaml["backend"]["TTS"]["chinese-roberta-wwm-ext-large_path"],
+        os.path.join(configYaml["backend"]["TTS"]["bert-model_path"], configYaml["backend"]["TTS"]["pth-name"]),
+        os.path.join(configYaml["backend"]["TTS"]["bert-model_path"], "config.json"),
+        device=configYaml["backend"]["device"]
     )
 
-    LLM.ready(log, SEARCH_URL)
+    LLM.ready(log, 
+              configYaml["backend"]["LLM"]["model_path"], 
+              configYaml["backend"]["LLM"]["max_token"],
+              configYaml["backend"]["LLM"]["threads_num"],
+              SEARCH_URL
+            )
 
     # 主循环
     log("INFO|[server] Back start!")
@@ -108,7 +105,7 @@ try:
         ou = list(LLM.split(text))
 
         log(f"INFO|[server] split {len(ou)}")
-        ou_t = [threadPool.submit(tts, i, "可莉") for i in ou]
+        ou_t = [threadPool.submit(tts, i, configYaml["backend"]["TTS"]["player"]) for i in ou]
         send_data("1")
 
         for i, future in enumerate(ou_t):

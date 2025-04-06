@@ -23,9 +23,7 @@ const yaml = require('js-yaml');
 const fs = require('fs');
 
 const mc_front = require("./front/mc/main.js").exports
-// const mc_front = () => { };
 
-// 读取 config.yaml 文件
 let configYaml;
 try {
     configYaml = yaml.load(fs.readFileSync('./config.yaml', 'utf8'));
@@ -34,17 +32,13 @@ try {
     process.exit(1);
 }
 
-// 提取端口配置
 const ports = configYaml.front.ports;
 
-// 提取 napcat 配置
 const napcatHttpPort = ports['napcat-http'];
 const napcatWebsocketPort = ports['napcat-websocket'];
 
-// 提取其他配置信息
 global.GROUP_ID = configYaml.backend.qq.group_id;
-// console.log(configYaml)
-// 配置信息
+
 const config = {
     ports: {
         loggerTcp: ports.loggerTCP,
@@ -80,25 +74,22 @@ function getTime(type = "INFO") {
     let colorCode;
     switch (type) {
         case "WARN":
-            colorCode = "\x1b[43m"; // 黄色背景
+            colorCode = "\x1b[43m";
             break;
         case "FAIL":
-            colorCode = "\x1b[41m"; // 红色背景
+            colorCode = "\x1b[41m";
             break;
         case "INFO":
         default:
-            colorCode = "\x1b[42m"; // 绿色背景
+            colorCode = "\x1b[42m";
             break;
     }
 
-    // 蓝色字体的ANSI转义码
     const blueFont = "\x1b[34m";
-    const resetCode = "\x1b[0m\x1b[1m"; // 重置颜色
+    const resetCode = "\x1b[0m\x1b[1m";
 
-    // 格式化时间字符串，包含毫秒
     const timeString = `[${year}/${month}/${day} ${hours < 10 ? "0" : ""}${hours}:${minutes < 10 ? "0" : ""}${minutes}:${seconds < 10 ? "0" : ""}${seconds}.${[].concat("0".repeat(3 - (milliseconds + "").length))}${milliseconds}]`;
 
-    // 输出带颜色的时间字符串
     return `${blueFont}${timeString}${resetCode} ${colorCode}${type}${resetCode}`;
 }
 
@@ -122,20 +113,18 @@ function extractImageContent(text) {
         remainingText: text
     };
 
-    const regex = /<IMAGE>(.*?)<\/IMAGE>/gs; // 匹配 <IMAGE> ... </IMAGE>，支持多行内容
+    const regex = /<IMAGE>(.*?)<\/IMAGE>/gs;
     let match;
 
     while ((match = regex.exec(text)) !== null) {
-        result.imageContent.push(match[1].trim()); // 提取 <IMAGE> ... </IMAGE> 中的内容
+        result.imageContent.push(match[1].trim());
     }
 
-    // 去除所有 <IMAGE> ... </IMAGE> 的内容
     result.remainingText = text.replace(regex, '').trim();
 
     return result;
 }
 
-// 提取 WebSocket 连接逻辑为函数
 function setupWebSocket(url, onMessage, onError) {
     const ws = new WebSocket(url);
 
@@ -152,9 +141,7 @@ function setupWebSocket(url, onMessage, onError) {
     return ws;
 }
 
-// 优化 startControlServer 函数
 function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
-    // HTTP 控制服务器
     http.createServer((req, res) => {
         try {
             res.end(readFileSync(`./front/ctrl${req.url}`));
@@ -165,7 +152,6 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
         console.log(getTime(), `[http_ctrl] HTTP control server started on port ${ctrlHttp}`);
     });
 
-    // WebSocket 服务器
     const wssShow = new WebSocket.Server({ port: wsPort, host: '0.0.0.0' }, () => {
         console.log(getTime(), `[ws_show] WebSocket server started on port ${wsPort}`);
     });
@@ -193,7 +179,6 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
         });
     });
 
-    // TCP 中间服务器
     const tcpServer = net.createServer((socket) => {
         tcpClient = socket;
         socket.on("data", (data) => {
@@ -218,7 +203,7 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
     });
 
     let running = false;
-    global.userid = null; /* User id. 用来 @*/
+    global.userid = null;
 
     const qqTcpServer = net.createServer((socket) => {
         socket.on("data", (data) => {
@@ -232,7 +217,7 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
                     {
                         "type": "at",
                         "data": {
-                            "qq": global.userid, //all为艾特全体
+                            "qq": global.userid,
                         }
                     },
                     {
@@ -278,7 +263,6 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
         console.log(getTime(), `[mid] Start qq server (TCP) at ${tcpPort + 1}`);
     });
 
-    // QQ WebSocket 客户端
     const qqWs = setupWebSocket(`ws://127.0.0.1:${napcatWebsocketPort}`, (data) => {
         data = JSON.parse(data);
         if (data["post_type"] === "message") {
@@ -287,7 +271,6 @@ function startControlServer(wsPort, wsCtrl, tcpPort, ctrlHttp) {
     });
 }
 
-// 提取 QQ 消息处理逻辑为函数
 function handleQQMessage(data, tcpClient) {
     if (running) return console.log(getTime(), `[mid] [qq] This message is ignored.`);
     const { sender, raw_message } = data;
@@ -316,7 +299,6 @@ function startRtmpServer(rtmpConfig) {
 
 function startFront() {
     let mainWindow = null;
-    // mc_front(getTime);
 
     app.on('window-all-closed', () => {
         app.quit();
@@ -327,7 +309,7 @@ function startFront() {
             webPreferences: {
                 nodeIntegration: true,
                 contextIsolation: true,
-                enableRemoteModule: true // 允许使用remote模块
+                enableRemoteModule: true
             },
             frame: false,
             fullscreen: true
@@ -345,11 +327,11 @@ function startBackend() {
 }
 
 async function startFfmpeg() {
-    exec("yarn ffmpeg");
+    const cmd = "ffmpeg " + configYaml.front.ffmpegargs.split("\n").join(" ");
+    console.log(getTime(), "Run cmd: " + cmd);
+    exec(cmd);
 };
 
-
-// 启动所有服务
 function startAllServices() {
     startLoggerServer(config.ports.loggerTcp);
     startControlServer(config.ports.websocket_show, config.ports.wsCtrl, config.ports.tcp_backend, config.ports.ctrl_http);
@@ -359,7 +341,6 @@ function startAllServices() {
         startBackend();
         startFfmpeg()
     }, 1000);
-
 }
 
 startAllServices();

@@ -39,12 +39,11 @@ front:
         show_player: true
 
     # 在 amd gpu 上面可以运行的版本，请自行更换参数
-    # 备注：为了 ffmpefg 能够使用 vaapi 编码，非root用于运行：
+    # 备注：为了 ffmpefg 能够使用 vaapi 编码，运行：
     # sudo chmod 666 /dev/dri/renderD128
     # 备注：如果你使用的是英特尔的集显，请将 /dev/dri/renderD128 替换为 /dev/dri/renderD129
     # 备注：如果你使用的是英伟达的显卡，请将 /dev/dri/renderD128 替换为 /dev/dri/renderD130
-    ffmpeg:
-        args: -vaapi_device /dev/dri/renderD128
+    ffmpegargs: -vaapi_device /dev/dri/renderD128
                 -f x11grab
                 -framerate 30
                 -draw_mouse 0
@@ -59,8 +58,9 @@ front:
                 -c:a aac 
                 -b:a 128k 
                 -vsync 1 
-                -f flv rtmp://127.0.0.1/main"
+                -f flv rtmp://127.0.0.1/main
 backend:
+    device: "cpu"
     LLM:
         model_path: "./LLM/qwen2.5-0.5b-instruct-q8_0.gguf"
         max_token: 32768
@@ -72,7 +72,7 @@ backend:
         chinese-roberta-wwm-ext-large_path: "./TTS/mods/chinese-roberta-wwm-ext-large"
         bert-model_path: "./TTS/mods/hoyoTTS"
         pth-name: "G_78000.pth"
-
+        player: 可莉
         # 运行线程数
         threads_num: 3
 

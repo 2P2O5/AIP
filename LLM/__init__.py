@@ -1,13 +1,5 @@
-# TODO 明天给我去下3B的qwen!
-# shutdown -h now
-
 from llama_cpp import Llama
 import os
-
-from typing import Generator
-dirnow = os.path.dirname(__file__)
-# 指定本地模型的路径
-model_path = dirnow + "/qwen2.5-0.5b-instruct-q8_0.gguf"
 
 # 加载模型
 global llm, log, search_url
@@ -15,12 +7,13 @@ llm = None
 log = None
 search_url = None
 
-def ready(_log, _SEARCH_URL):
+def ready(_log, gguf_url, max_token, threads_num, _SEARCH_URL):
     global llm, log, search_url
     llm = Llama(
-        model_path=model_path,
+        model_path=gguf_url,
         verbose=False,
-        n_ctx=32768
+        n_ctx=max_token,
+        n_threads=threads_num
     )
     log, search_url = _log, _SEARCH_URL
 
